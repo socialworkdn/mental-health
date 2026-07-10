@@ -1,31 +1,1442 @@
 <!DOCTYPE html>
 <html lang="th">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>การดูแลสุขภาพจิตผู้ติดเชื้อ</title> <link rel="icon" type="image/png" href="https://img2.pic.in.th/Logo-sw.png">
-    <style>
-        body, html {
-            margin: 0;
-            padding: 0;
-            height: 100%;
-            overflow: hidden; /* ซ่อน Scrollbar ของหน้าหลัก */
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ระบบการดูแลสุขภาพจิต</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Sarabun', 'sans-serif'] }
         }
-        iframe {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            border: none;
-        }
-    </style>
+      }
+    }
+  </script>
+  <style>
+    body { font-family: 'Sarabun', sans-serif; }
+    [v-cloak] { display: none; }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    @media print {
+      body * { visibility: hidden; }
+      #printArea, #printArea * { visibility: visible; }
+      #printArea { position: absolute; top: 0; left: 0; width: 100%; }
+      .no-print { display: none !important; }
+    }
+  </style>
 </head>
-<body>
+<body class="bg-slate-50 text-slate-800">
 
-    <iframe src="https://script.google.com/macros/s/AKfycbwdPhGtnr1pE8XPTqluj5C_tkPG32SFKghccgDr-nRSqLXJnIyrqWJd2BBqIo7ulCf71A/exec">
-        เบราว์เซอร์ของคุณไม่รองรับการแสดงผล iframe
-    </iframe>
+  <div id="app" v-cloak class="min-h-screen py-8 px-4 sm:px-6 lg:px-8">
 
+    <!-- Toast container (ต้องอยู่ภายใน #app เพื่อให้ Vue ประมวลผล template ได้) -->
+    <div class="fixed top-4 right-4 z-[100] flex flex-col gap-2 w-[calc(100%-2rem)] sm:w-96 no-print">
+      <transition-group name="toast" tag="div" class="flex flex-col gap-2">
+        <div v-for="t in toasts" :key="t.id"
+          :class="['flex items-start gap-3 p-4 rounded-xl shadow-lg border text-sm font-medium',
+            t.type === 'success' ? 'bg-green-50 text-green-800 border-green-200' :
+            t.type === 'error' ? 'bg-rose-50 text-rose-800 border-rose-200' :
+            'bg-slate-800 text-white border-slate-700']">
+          <i :class="['fa-solid mt-0.5', t.type === 'success' ? 'fa-circle-check' : t.type === 'error' ? 'fa-circle-exclamation' : 'fa-circle-info']"></i>
+          <div class="flex-1">{{ t.message }}</div>
+          <button @click="dismissToast(t.id)" class="opacity-60 hover:opacity-100"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+      </transition-group>
+    </div>
+
+    <div class="max-w-6xl mx-auto space-y-6 relative">
+
+      <div class="bg-white rounded-2xl shadow-sm p-6 text-center border-t-4 border-teal-500 relative">
+        <button v-if="isLoggedIn" @click="logout" class="no-print absolute top-4 right-4 text-slate-400 hover:text-rose-500 transition-colors text-sm flex items-center gap-1 bg-slate-50 px-3 py-1.5 rounded-lg border">
+          <i class="fa-solid fa-arrow-right-from-bracket"></i> ออกจากระบบ
+        </button>
+        <img src="https://img2.pic.in.th/Logo-sw69955fa2f587f62221.png" alt="Logo" class="h-20 mx-auto mb-4 object-contain"/>
+        <h1 class="text-2xl font-bold text-slate-900">ระบบประเมินและดูแลสุขภาพจิต</h1>
+        <p class="text-slate-500 mt-1">ผู้ติดเชื้อรายใหม่ (New diagnosis / New case)</p>
+      </div>
+
+      <div class="no-print bg-white p-2 rounded-2xl shadow-sm flex flex-col sm:flex-row gap-2 border border-slate-100">
+        <button v-if="userRole !== 'viewer'" @click="topTab = 'form'" :class="['flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-medium transition-all', topTab === 'form' ? 'bg-teal-50 text-teal-700 shadow-sm' : 'text-slate-500 hover:bg-slate-50']">
+          <i class="fa-solid fa-plus-circle"></i> ประเมินรายใหม่
+        </button>
+        <button @click="topTab = 'backend'" :class="['flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-medium transition-all', topTab === 'backend' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50']">
+          <template v-if="isLoggedIn"><i class="fa-solid fa-desktop"></i> ระบบหลังบ้าน</template>
+          <template v-else><i class="fa-solid fa-lock"></i> เข้าสู่ระบบ</template>
+        </button>
+      </div>
+
+      <!-- ============ ฟอร์มประเมิน (Stepper) ============ -->
+      <div v-show="topTab === 'form'" class="space-y-6 animate-[fadeIn_0.3s_ease-in-out]">
+
+        <!-- แจ้งเตือน draft ค้าง -->
+        <div v-if="hasDraft && !draftDismissed" class="bg-amber-50 border border-amber-200 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div class="flex items-center gap-2 text-amber-800 text-sm">
+            <i class="fa-solid fa-clock-rotate-left"></i>
+            พบข้อมูลแบบประเมินที่กรอกค้างไว้ ต้องการทำต่อจากเดิมหรือไม่?
+          </div>
+          <div class="flex gap-2">
+            <button @click="restoreDraft" class="px-4 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-sm rounded-lg font-medium">ทำต่อ</button>
+            <button @click="discardDraft" class="px-4 py-1.5 bg-white border border-amber-300 text-amber-700 text-sm rounded-lg font-medium">เริ่มใหม่</button>
+          </div>
+        </div>
+
+        <!-- Progress bar -->
+        <div class="bg-white rounded-2xl shadow-sm p-5 border border-slate-100">
+          <div class="flex justify-between text-xs sm:text-sm font-medium text-slate-500 mb-2">
+            <span :class="formStep >= 1 ? 'text-teal-600' : ''">1. ข้อมูลทั่วไป</span>
+            <span :class="formStep >= 2 ? 'text-blue-600' : ''">2. M.H.S.C.A</span>
+            <span :class="formStep >= 3 ? 'text-rose-600' : ''">3. ST5</span>
+            <span :class="formStep >= 4 ? 'text-teal-600' : ''">4. ยืนยัน</span>
+          </div>
+          <div class="w-full bg-slate-100 rounded-full h-2">
+            <div class="bg-teal-500 h-2 rounded-full transition-all" :style="`width: ${(formStep/4)*100}%`"></div>
+          </div>
+        </div>
+
+        <!-- Step 1: ข้อมูลทั่วไป -->
+        <div v-show="formStep === 1" class="bg-white rounded-2xl shadow-sm p-6 border border-slate-100">
+          <div class="flex items-center gap-2 mb-6 border-b pb-3">
+            <i class="fa-solid fa-user text-teal-600 text-xl"></i>
+            <h2 class="text-xl font-semibold">1. ข้อมูลทั่วไป</h2>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1">HN (Hospital Number) <span class="text-rose-500">*</span></label>
+              <input type="text" v-model="form.hn" @blur="onHNBlur" class="w-full rounded-lg border-slate-300 focus:border-teal-500 focus:ring-teal-500 p-2.5 border" placeholder="ระบุรหัสผู้ป่วย"/>
+              <p v-if="hnCheck.found" class="text-xs text-amber-600 mt-1.5"><i class="fa-solid fa-circle-info mr-1"></i>เคยประเมิน HN นี้มาแล้ว {{ hnCheck.count }} ครั้ง ล่าสุดเมื่อ {{ hnCheck.lastDate }} (การบันทึกครั้งนี้จะถูกเพิ่มเป็นรายการใหม่)</p>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1">อายุ (ปี) <span class="text-rose-500">*</span></label>
+              <input type="number" min="0" max="120" v-model="form.age" class="w-full rounded-lg border-slate-300 focus:border-teal-500 focus:ring-teal-500 p-2.5 border" placeholder="ระบุอายุ"/>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1">เพศ <span class="text-rose-500">*</span></label>
+              <select v-model="form.gender" class="w-full rounded-lg border-slate-300 focus:border-teal-500 focus:ring-teal-500 p-2.5 border bg-white">
+                <option value="">-- เลือกเพศ --</option>
+                <option value="ชาย">ชาย</option>
+                <option value="หญิง">หญิง</option>
+                <option value="หลากหลายทางเพศ">หลากหลายทางเพศ (LGBTQ+)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1">สถานะการใช้บริการ <span class="text-rose-500">*</span></label>
+              <select v-model="form.status" class="w-full rounded-lg border-slate-300 focus:border-teal-500 focus:ring-teal-500 p-2.5 border bg-white">
+                <option value="">-- เลือกสถานะ --</option>
+                <option value="New diagnosis">New diagnosis (วินิจฉัยใหม่)</option>
+                <option value="New case">New case (ผู้ป่วยใหม่ของหน่วยบริการ)</option>
+              </select>
+            </div>
+          </div>
+          <div class="flex justify-end mt-6">
+            <button @click="goToStep(2)" :disabled="!step1Valid" class="flex items-center gap-2 px-6 py-2.5 rounded-xl font-medium text-white bg-teal-600 hover:bg-teal-700 disabled:bg-slate-300 disabled:cursor-not-allowed">
+              ถัดไป <i class="fa-solid fa-arrow-right"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Step 2: MHSCA -->
+        <div v-show="formStep === 2" class="bg-white rounded-2xl shadow-sm p-6 border border-slate-100 overflow-hidden">
+          <div class="flex items-center justify-between mb-4 border-b pb-3">
+            <div class="flex items-center gap-2">
+              <i class="fa-solid fa-clipboard-list text-blue-600 text-xl"></i>
+              <h2 class="text-xl font-semibold">2.1 แบบประเมินการดูแลสุขภาพจิตตนเอง (M.H.S.C.A)</h2>
+            </div>
+            <span :class="['text-sm px-3 py-1 rounded-full whitespace-nowrap', mhsca.isComplete ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700']">ตอบแล้ว {{ mhsca.count }}/15</span>
+          </div>
+
+          <!-- Desktop: table -->
+          <div class="overflow-x-auto mb-4 hidden md:block">
+            <table class="w-full text-sm text-left">
+              <thead class="bg-slate-50 text-slate-700">
+                <tr>
+                  <th class="px-4 py-3 rounded-tl-lg w-1/2">ข้อคำถาม</th>
+                  <th class="px-2 py-3 text-center">5</th>
+                  <th class="px-2 py-3 text-center">4</th>
+                  <th class="px-2 py-3 text-center">3</th>
+                  <th class="px-2 py-3 text-center">2</th>
+                  <th class="px-2 py-3 text-center rounded-tr-lg">1</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(q, index) in mhscaQuestions" :key="index" class="border-b border-slate-100 hover:bg-slate-50">
+                  <td class="px-4 py-3">{{ index + 1 }}. {{ q }}</td>
+                  <td v-for="val in [5,4,3,2,1]" :key="val" class="px-2 py-3 text-center">
+                    <input type="radio" :name="'mhsca_'+index" :value="val" v-model="mhscaAnswers[index]" class="w-5 h-5 text-blue-600 focus:ring-blue-500 cursor-pointer"/>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Mobile: card list -->
+          <div class="md:hidden space-y-3 mb-4">
+            <div v-for="(q, index) in mhscaQuestions" :key="index" class="p-3 rounded-xl border border-slate-200 bg-slate-50">
+              <p class="text-sm mb-3">{{ index + 1 }}. {{ q }}</p>
+              <div class="grid grid-cols-5 gap-1">
+                <label v-for="val in [1,2,3,4,5]" :key="val" :class="['flex flex-col items-center justify-center py-2 rounded-lg border text-xs font-semibold cursor-pointer', mhscaAnswers[index] === val ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-500 border-slate-200']">
+                  <input type="radio" :name="'mhsca_m_'+index" :value="val" v-model="mhscaAnswers[index]" class="hidden"/>
+                  {{ val }}
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="mhsca.isComplete" class="p-5 bg-slate-50 rounded-xl border border-slate-200 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-4">
+              <div class="w-14 h-14 rounded-full bg-white shadow-sm border border-slate-200 flex items-center justify-center">
+                <i class="fa-solid fa-brain text-2xl text-slate-400"></i>
+              </div>
+              <div>
+                <div class="text-sm text-slate-500">ผลคะแนน (M.H.S.C.A)</div>
+                <div class="text-3xl font-bold text-slate-800">{{ mhsca.score }} <span class="text-base font-normal text-slate-500">คะแนน</span></div>
+              </div>
+            </div>
+            <div :class="['px-5 py-2.5 rounded-lg border font-medium shadow-sm', mhsca.colorClass]">ผลการประเมิน: {{ mhsca.meaning }}</div>
+          </div>
+          <div v-else class="p-4 bg-slate-50 rounded-xl border border-slate-200 text-center text-slate-400 text-sm italic">
+            กรุณาตอบแบบสอบถามให้ครบ 15 ข้อ เพื่อดูผลประเมิน
+          </div>
+
+          <div class="flex justify-between mt-6">
+            <button @click="goToStep(1)" class="flex items-center gap-2 px-6 py-2.5 rounded-xl font-medium text-slate-600 bg-slate-100 hover:bg-slate-200"><i class="fa-solid fa-arrow-left"></i> ย้อนกลับ</button>
+            <button @click="goToStep(3)" :disabled="!mhsca.isComplete" class="flex items-center gap-2 px-6 py-2.5 rounded-xl font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed">ถัดไป <i class="fa-solid fa-arrow-right"></i></button>
+          </div>
+        </div>
+
+        <!-- Step 3: ST5 -->
+        <div v-show="formStep === 3" class="bg-white rounded-2xl shadow-sm p-6 border border-slate-100 overflow-hidden">
+          <div class="flex items-center justify-between mb-4 border-b pb-3">
+            <div class="flex items-center gap-2">
+              <i class="fa-solid fa-heart-pulse text-rose-500 text-xl"></i>
+              <h2 class="text-xl font-semibold">2.2 แบบประเมินความเครียด (ST5)</h2>
+            </div>
+            <span :class="['text-sm px-3 py-1 rounded-full whitespace-nowrap', st5.isComplete ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700']">ตอบแล้ว {{ st5.count }}/5</span>
+          </div>
+
+          <!-- Desktop: table -->
+          <div class="overflow-x-auto mb-4 hidden md:block">
+            <table class="w-full text-sm text-left">
+              <thead class="bg-slate-50 text-slate-700">
+                <tr>
+                  <th class="px-4 py-3 rounded-tl-lg w-1/2 align-bottom">
+                    <div class="font-semibold">ข้อคำถาม</div>
+                    <div class="text-[11px] font-normal text-slate-500 mt-0.5">อาการหรือความรู้สึกที่เกิดในระยะ 2 - 4 สัปดาห์</div>
+                  </th>
+                  <th class="px-2 py-3 text-center align-bottom">
+                    <div class="text-base font-bold">3</div>
+                    <div class="text-[10px] md:text-xs font-normal text-slate-500 mt-0.5 leading-tight whitespace-nowrap">เป็นประจำ</div>
+                  </th>
+                  <th class="px-2 py-3 text-center align-bottom">
+                    <div class="text-base font-bold">2</div>
+                    <div class="text-[10px] md:text-xs font-normal text-slate-500 mt-0.5 leading-tight whitespace-nowrap">เป็นบ่อยครั้ง</div>
+                  </th>
+                  <th class="px-2 py-3 text-center align-bottom">
+                    <div class="text-base font-bold">1</div>
+                    <div class="text-[10px] md:text-xs font-normal text-slate-500 mt-0.5 leading-tight whitespace-nowrap">เป็นบางครั้ง</div>
+                  </th>
+                  <th class="px-2 py-3 text-center rounded-tr-lg align-bottom">
+                    <div class="text-base font-bold">0</div>
+                    <div class="text-[10px] md:text-xs font-normal text-slate-500 mt-0.5 leading-tight whitespace-nowrap">แทบไม่มี</div>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(q, index) in st5Questions" :key="index" class="border-b border-slate-100 hover:bg-slate-50">
+                  <td class="px-4 py-3">{{ index + 1 }}. {{ q }}</td>
+                  <td v-for="val in [3,2,1,0]" :key="val" class="px-2 py-3 text-center">
+                    <input type="radio" :name="'st5_'+index" :value="val" v-model="st5Answers[index]" class="w-5 h-5 text-rose-500 focus:ring-rose-500 cursor-pointer"/>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Mobile: card list -->
+          <div class="md:hidden space-y-3 mb-4">
+            <div v-for="(q, index) in st5Questions" :key="index" class="p-3 rounded-xl border border-slate-200 bg-slate-50">
+              <p class="text-sm mb-3">{{ index + 1 }}. {{ q }}</p>
+              <div class="grid grid-cols-4 gap-1">
+                <label v-for="opt in [{v:0,l:'แทบไม่มี'},{v:1,l:'บางครั้ง'},{v:2,l:'บ่อยครั้ง'},{v:3,l:'ประจำ'}]" :key="opt.v" :class="['flex flex-col items-center justify-center py-2 rounded-lg border text-[11px] font-semibold cursor-pointer', st5Answers[index] === opt.v ? 'bg-rose-500 text-white border-rose-500' : 'bg-white text-slate-500 border-slate-200']">
+                  <input type="radio" :name="'st5_m_'+index" :value="opt.v" v-model="st5Answers[index]" class="hidden"/>
+                  <span class="text-sm">{{ opt.v }}</span>
+                  <span>{{ opt.l }}</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="st5.isComplete" class="p-5 bg-slate-50 rounded-xl border border-slate-200 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-4">
+              <div class="w-14 h-14 rounded-full bg-white shadow-sm border border-slate-200 flex items-center justify-center">
+                <i class="fa-solid fa-face-frown-open text-2xl text-slate-400"></i>
+              </div>
+              <div>
+                <div class="text-sm text-slate-500">ผลคะแนน (ST5)</div>
+                <div class="text-3xl font-bold text-slate-800">{{ st5.score }} <span class="text-base font-normal text-slate-500">คะแนน</span></div>
+              </div>
+            </div>
+            <div :class="['px-5 py-2.5 rounded-lg border font-medium shadow-sm', st5.colorClass]">ผลการประเมิน: {{ st5.meaning }}</div>
+          </div>
+          <div v-else class="p-4 bg-slate-50 rounded-xl border border-slate-200 text-center text-slate-400 text-sm italic">
+            กรุณาตอบแบบสอบถามให้ครบ 5 ข้อ เพื่อดูผลประเมิน
+          </div>
+
+          <div class="flex justify-between mt-6">
+            <button @click="goToStep(2)" class="flex items-center gap-2 px-6 py-2.5 rounded-xl font-medium text-slate-600 bg-slate-100 hover:bg-slate-200"><i class="fa-solid fa-arrow-left"></i> ย้อนกลับ</button>
+            <button @click="goToStep(4)" :disabled="!st5.isComplete" class="flex items-center gap-2 px-6 py-2.5 rounded-xl font-medium text-white bg-rose-500 hover:bg-rose-600 disabled:bg-slate-300 disabled:cursor-not-allowed">ถัดไป <i class="fa-solid fa-arrow-right"></i></button>
+          </div>
+        </div>
+
+        <!-- Step 4: สรุปและยืนยัน -->
+        <div v-show="formStep === 4" class="bg-white rounded-2xl shadow-sm p-6 border border-slate-100">
+          <div class="flex items-center gap-2 mb-6 border-b pb-3">
+            <i class="fa-solid fa-list-check text-teal-600 text-xl"></i>
+            <h2 class="text-xl font-semibold">4. ตรวจสอบและยืนยันการบันทึก</h2>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6 text-sm">
+            <div class="p-4 bg-slate-50 rounded-xl border"><span class="text-slate-500">HN:</span> <span class="font-semibold">{{ form.hn }}</span></div>
+            <div class="p-4 bg-slate-50 rounded-xl border"><span class="text-slate-500">อายุ:</span> <span class="font-semibold">{{ form.age }} ปี</span></div>
+            <div class="p-4 bg-slate-50 rounded-xl border"><span class="text-slate-500">เพศ:</span> <span class="font-semibold">{{ form.gender }}</span></div>
+            <div class="p-4 bg-slate-50 rounded-xl border"><span class="text-slate-500">สถานะ:</span> <span class="font-semibold">{{ form.status }}</span></div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+            <div :class="['p-5 rounded-xl border', mhsca.colorClass]">
+              <div class="text-sm opacity-80">M.H.S.C.A</div>
+              <div class="text-2xl font-bold">{{ mhsca.score }} คะแนน</div>
+              <div class="text-sm">{{ mhsca.meaning }}</div>
+            </div>
+            <div :class="['p-5 rounded-xl border', st5.colorClass]">
+              <div class="text-sm opacity-80">ST5</div>
+              <div class="text-2xl font-bold">{{ st5.score }} คะแนน</div>
+              <div class="text-sm">{{ st5.meaning }}</div>
+            </div>
+          </div>
+
+          <div v-if="mhsca.score < 52 || st5.score >= 5" class="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-sm flex items-start gap-2">
+            <i class="fa-solid fa-triangle-exclamation mt-0.5"></i>
+            ผลประเมินเข้าเกณฑ์เฝ้าระวัง ระบบจะส่งอีเมลแจ้งเตือนเจ้าหน้าที่โดยอัตโนมัติหลังบันทึก
+          </div>
+
+          <div class="flex flex-col items-center gap-4">
+            <button @click="submitForm" :disabled="submitStatus.loading" :class="['flex items-center justify-center gap-2 w-full md:w-auto px-10 py-4 text-white text-lg font-medium rounded-xl shadow-lg transition-all', submitStatus.loading ? 'bg-slate-400 cursor-not-allowed' : 'bg-teal-600 hover:bg-teal-700 hover:shadow-teal-500/30']">
+              <template v-if="submitStatus.loading"><i class="fa-solid fa-spinner fa-spin"></i> กำลังบันทึก...</template>
+              <template v-else><i class="fa-solid fa-save"></i> ยืนยันบันทึกแบบประเมิน</template>
+            </button>
+            <button @click="goToStep(3)" class="text-sm text-slate-500 hover:text-slate-800"><i class="fa-solid fa-arrow-left mr-1"></i> แก้ไขคำตอบ</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ หลังบ้าน ============ -->
+      <div v-show="topTab === 'backend'" class="animate-[fadeIn_0.3s_ease-in-out]">
+
+        <div v-if="!isLoggedIn" class="max-w-md mx-auto bg-white p-8 rounded-2xl shadow-sm border border-slate-100 mt-10">
+          <div class="text-center mb-6">
+            <div class="w-16 h-16 bg-slate-100 text-slate-400 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl">
+              <i class="fa-solid fa-lock"></i>
+            </div>
+            <h2 class="text-xl font-bold text-slate-800">เข้าสู่ระบบหลังบ้าน</h2>
+          </div>
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1">Username</label>
+              <div class="relative">
+                <i class="fa-solid fa-user absolute left-3 top-3.5 text-slate-400"></i>
+                <input type="text" v-model="loginData.username" class="pl-10 w-full rounded-lg border-slate-300 p-2.5 border" placeholder="Username" @keyup.enter="handleLogin"/>
+              </div>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1">Password</label>
+              <div class="relative">
+                <i class="fa-solid fa-key absolute left-3 top-3.5 text-slate-400"></i>
+                <input :type="showPassword ? 'text' : 'password'" v-model="loginData.password" class="pl-10 pr-10 w-full rounded-lg border-slate-300 p-2.5 border" placeholder="Password" @keyup.enter="handleLogin"/>
+                <button type="button" @click="showPassword = !showPassword" class="absolute right-3 top-3.5 text-slate-400 hover:text-slate-600">
+                  <i :class="['fa-solid', showPassword ? 'fa-eye-slash' : 'fa-eye']"></i>
+                </button>
+              </div>
+            </div>
+            <div v-if="loginError" class="text-rose-500 text-sm bg-rose-50 p-2 rounded border border-rose-100 flex items-center gap-2">
+              <i class="fa-solid fa-circle-exclamation"></i> {{ loginError }}
+            </div>
+            <button @click="handleLogin" :disabled="isLoggingIn" class="w-full bg-slate-800 text-white font-medium py-3 rounded-lg hover:bg-slate-900 flex justify-center items-center gap-2">
+              <i v-if="isLoggingIn" class="fa-solid fa-spinner fa-spin"></i> เข้าสู่ระบบ
+            </button>
+          </div>
+        </div>
+
+        <div v-else class="space-y-6">
+          <div class="no-print flex flex-col sm:flex-row items-center gap-2 border-b border-slate-200 pb-4">
+            <div class="flex bg-slate-200/50 p-1 rounded-lg w-full sm:w-auto overflow-x-auto no-scrollbar">
+              <button @click="backendTab = 'search'" :class="['px-4 py-2 rounded-md text-sm font-medium flex-1 whitespace-nowrap', backendTab === 'search' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-600 hover:text-slate-900']"><i class="fa-solid fa-search mr-1"></i> ค้นหาประวัติ / แผน</button>
+              <button @click="backendTab = 'dashboard'" :class="['px-4 py-2 rounded-md text-sm font-medium flex-1 whitespace-nowrap', backendTab === 'dashboard' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-600 hover:text-slate-900']"><i class="fa-solid fa-chart-pie mr-1"></i> แดชบอร์ดสรุปผล</button>
+              <button v-if="userRole === 'admin'" @click="backendTab = 'users'" :class="['px-4 py-2 rounded-md text-sm font-medium flex-1 whitespace-nowrap', backendTab === 'users' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-600 hover:text-slate-900']"><i class="fa-solid fa-users-gear mr-1"></i> จัดการผู้ใช้</button>
+            </div>
+            <div class="ml-auto flex items-center gap-2 text-sm bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-full border border-indigo-100 font-medium mt-2 sm:mt-0 whitespace-nowrap">
+              <i class="fa-solid fa-shield-halved"></i> สิทธิ์ของคุณ: {{ userRole === 'admin' ? 'Admin (แอดมิน)' : 'Viewer (ดูข้อมูล)' }}
+            </div>
+          </div>
+
+          <div v-show="backendTab === 'search'" class="bg-white rounded-2xl shadow-sm p-6 border border-slate-100">
+            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 border-b pb-3 gap-4">
+              <div class="flex items-center gap-2">
+                <i class="fa-solid fa-list-check text-teal-600 text-xl"></i>
+                <h2 class="text-xl font-semibold">รายชื่อผู้รับบริการ และ การจัดการแผน/บันทึกบริการ</h2>
+              </div>
+              <div class="flex gap-2">
+                <button @click="exportCSV" class="text-sm text-indigo-600 hover:bg-indigo-50 px-3 py-1.5 rounded-md border border-indigo-100"><i class="fa-solid fa-file-csv"></i> ส่งออก CSV</button>
+                <button @click="fetchRecords" class="text-sm text-teal-600 hover:bg-teal-50 px-3 py-1.5 rounded-md border border-teal-100"><i class="fa-solid fa-rotate-right"></i> รีเฟรชข้อมูล</button>
+              </div>
+            </div>
+
+            <div class="flex flex-col sm:flex-row gap-3 mb-6">
+              <div class="relative flex-1">
+                <i class="fa-solid fa-search absolute left-4 top-3.5 text-slate-400"></i>
+                <input type="text" v-model="searchQuery" class="pl-10 w-full rounded-lg border-slate-300 p-3 border bg-slate-50" placeholder="ค้นหาด้วย HN หรือสถานะ..."/>
+              </div>
+              <select v-model="riskFilter" class="rounded-lg border-slate-300 p-3 border bg-slate-50 text-sm">
+                <option value="all">ทุกระดับความเสี่ยง</option>
+                <option value="highStress">เครียดปานกลางขึ้นไป (ST5 ≥ 5)</option>
+                <option value="lowMental">สุขภาพจิตปานกลางลงมา (MHSCA &lt; 52)</option>
+                <option value="noPlan">ยังไม่มีแผนบริการ</option>
+              </select>
+            </div>
+
+            <div class="overflow-x-auto rounded-lg border border-slate-200">
+              <table class="w-full text-sm text-left">
+                <thead class="bg-slate-100 text-slate-700">
+                  <tr>
+                    <th class="px-4 py-3">วันที่ประเมิน</th>
+                    <th class="px-4 py-3">HN</th>
+                    <th class="px-4 py-3">สถานะ</th>
+                    <th class="px-4 py-3">สุขภาพจิต (MHSCA)</th>
+                    <th class="px-4 py-3">ความเครียด (ST5)</th>
+                    <th class="px-4 py-3">ข้อมูลแผนบริการ</th>
+                    <th class="px-4 py-3 text-center bg-teal-50/50">การจัดการ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-if="isLoadingRecords">
+                    <td colspan="7" class="px-4 py-8 text-center text-slate-500"><i class="fa-solid fa-spinner fa-spin mr-2"></i> กำลังโหลด...</td>
+                  </tr>
+                  <tr v-else-if="filteredRecords.length === 0">
+                    <td colspan="7" class="px-4 py-8 text-center text-slate-500">ไม่พบข้อมูลประวัติ</td>
+                  </tr>
+                  <tr v-for="(record, index) in paginatedRecords" :key="index" class="border-b border-slate-100 hover:bg-slate-50">
+                    <td class="px-4 py-3 whitespace-nowrap"><i class="fa-regular fa-calendar text-slate-400 mr-2"></i>{{ record.date }}</td>
+                    <td class="px-4 py-3 font-medium">{{ record.hn }}</td>
+                    <td class="px-4 py-3"><span class="px-2 py-1 bg-slate-100 text-slate-600 rounded-md text-[10px] whitespace-nowrap">{{ record.status }}</span></td>
+                    <td class="px-4 py-3 whitespace-nowrap">
+                      <div :class="['font-semibold', record.mhscaScore < 52 ? 'text-rose-600' : 'text-blue-600']">{{ record.mhscaScore }}</div>
+                      <div class="text-[10px] text-slate-500 truncate max-w-[80px]">{{ record.mhscaResult }}</div>
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap">
+                      <div :class="['font-semibold', record.st5Score >= 5 ? 'text-rose-600' : 'text-amber-600']">{{ record.st5Score }}</div>
+                      <div class="text-[10px] text-slate-500 truncate max-w-[80px]">{{ record.st5Result }}</div>
+                    </td>
+                    <td class="px-4 py-3 align-top">
+                      <div class="flex flex-col gap-1">
+                        <span v-if="record.planAssessmentDetail && record.planAssessmentDetail !== '-'" class="text-[11px] px-1.5 py-0.5 bg-indigo-50 text-indigo-700 rounded border line-clamp-1"><span class="font-semibold mr-1">ประเมิน:</span>{{ record.planAssessmentDetail }}</span>
+                        <span v-if="record.planTherapyDetail && record.planTherapyDetail !== '-'" class="text-[11px] px-1.5 py-0.5 bg-indigo-50 text-indigo-700 rounded border line-clamp-1"><span class="font-semibold mr-1">บำบัด:</span>{{ record.planTherapyDetail }}</span>
+                        <span v-if="record.planRehabDetail && record.planRehabDetail !== '-'" class="text-[11px] px-1.5 py-0.5 bg-indigo-50 text-indigo-700 rounded border line-clamp-1"><span class="font-semibold mr-1">ฟื้นฟู:</span>{{ record.planRehabDetail }}</span>
+                        <span v-if="record.planResourceDetail && record.planResourceDetail !== '-'" class="text-[11px] px-1.5 py-0.5 bg-indigo-50 text-indigo-700 rounded border line-clamp-1"><span class="font-semibold mr-1">ทรัพยากร:</span>{{ record.planResourceDetail }}</span>
+                        <span v-if="(!record.planAssessmentDetail || record.planAssessmentDetail === '-') && (!record.planTherapyDetail || record.planTherapyDetail === '-') && (!record.planRehabDetail || record.planRehabDetail === '-') && (!record.planResourceDetail || record.planResourceDetail === '-')" class="text-xs text-slate-400 italic">ยังไม่มีแผน</span>
+                        <span v-if="record.serviceHistory && record.serviceHistory !== '-'" class="mt-1 text-[11px] px-1.5 py-0.5 bg-teal-50 text-teal-700 rounded border border-teal-200 w-max"><i class="fa-solid fa-clock-rotate-left mr-1"></i> มีประวัติให้บริการ</span>
+                      </div>
+                    </td>
+                    <td class="px-4 py-3 text-center bg-teal-50/10">
+                      <button v-if="userRole === 'admin'" @click="openManageModal(record)" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded text-xs shadow-sm whitespace-nowrap"><i class="fa-solid fa-folder-open mr-1"></i> เปิดแฟ้ม</button>
+                      <span v-else class="text-xs text-slate-400 font-medium border border-slate-200 bg-slate-50 px-2 py-1 rounded whitespace-nowrap">ดูได้อย่างเดียว</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Pagination -->
+            <div v-if="filteredRecords.length > pageSize" class="flex items-center justify-between mt-4 text-sm text-slate-600">
+              <span>ทั้งหมด {{ filteredRecords.length }} รายการ (หน้า {{ currentPage }}/{{ totalPages }})</span>
+              <div class="flex gap-2">
+                <button @click="currentPage = Math.max(1, currentPage - 1)" :disabled="currentPage === 1" class="px-3 py-1.5 rounded-lg border bg-white disabled:opacity-40"><i class="fa-solid fa-chevron-left"></i></button>
+                <button @click="currentPage = Math.min(totalPages, currentPage + 1)" :disabled="currentPage === totalPages" class="px-3 py-1.5 rounded-lg border bg-white disabled:opacity-40"><i class="fa-solid fa-chevron-right"></i></button>
+              </div>
+            </div>
+          </div>
+
+          <div v-show="backendTab === 'dashboard'">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+              <div class="bg-white p-6 rounded-2xl shadow-sm border flex items-center gap-4">
+                <div class="p-4 bg-teal-100 text-teal-600 rounded-xl"><i class="fa-solid fa-users text-2xl"></i></div>
+                <div><div class="text-sm font-medium">ผู้รับบริการทั้งหมด</div><div class="text-3xl font-bold">{{ records.length }}</div></div>
+              </div>
+              <div class="bg-white p-6 rounded-2xl shadow-sm border flex items-center gap-4">
+                <div class="p-4 bg-rose-100 text-rose-600 rounded-xl"><i class="fa-solid fa-heart-pulse text-2xl"></i></div>
+                <div>
+                  <div class="text-sm font-medium">เครียดปานกลางขึ้นไป</div>
+                  <div class="text-3xl font-bold text-rose-600">{{ dashboardStats.highStress }}</div>
+                  <div class="text-[11px] text-slate-400">ST5 ≥ 5 คะแนน (เกณฑ์แจ้งเตือนอีเมล)</div>
+                </div>
+              </div>
+              <div class="bg-white p-6 rounded-2xl shadow-sm border flex items-center gap-4">
+                <div class="p-4 bg-blue-100 text-blue-600 rounded-xl"><i class="fa-solid fa-notes-medical text-2xl"></i></div>
+                <div>
+                  <div class="text-sm font-medium">สุขภาพจิตปานกลางลงมา</div>
+                  <div class="text-3xl font-bold text-blue-600">{{ dashboardStats.lowMental }}</div>
+                  <div class="text-[11px] text-slate-400">MHSCA &lt; 52 คะแนน (เกณฑ์แจ้งเตือนอีเมล)</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-2xl shadow-sm border mb-6">
+              <h3 class="text-lg font-bold text-slate-800 mb-4"><i class="fa-solid fa-chart-line text-teal-600 mr-2"></i>แนวโน้มรายเดือน</h3>
+              <div class="relative h-64">
+                <canvas ref="trendChartCanvas"></canvas>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              <div class="bg-white p-6 rounded-2xl shadow-sm border">
+                <h3 class="text-lg font-bold text-slate-800 mb-5"><i class="fa-solid fa-clipboard-check text-indigo-600 mr-2"></i>สรุปแผนบริการทางสังคม (จำแนกตามผู้ป่วย)</h3>
+                <div class="space-y-5">
+                  <div>
+                    <div class="flex justify-between text-sm mb-1.5"><span class="font-medium text-slate-700">การประเมินและวินิจฉัย</span><span class="font-bold text-indigo-600">{{ dashboardStats.planCounts.assessment }} ราย</span></div>
+                    <div class="w-full bg-slate-100 rounded-full h-2.5"><div class="bg-indigo-500 h-2.5 rounded-full" :style="`width: ${records.length ? (dashboardStats.planCounts.assessment/records.length)*100 : 0}%`"></div></div>
+                  </div>
+                  <div>
+                    <div class="flex justify-between text-sm mb-1.5"><span class="font-medium text-slate-700">การบำบัดทางสังคม</span><span class="font-bold text-indigo-600">{{ dashboardStats.planCounts.therapy }} ราย</span></div>
+                    <div class="w-full bg-slate-100 rounded-full h-2.5"><div class="bg-indigo-500 h-2.5 rounded-full" :style="`width: ${records.length ? (dashboardStats.planCounts.therapy/records.length)*100 : 0}%`"></div></div>
+                  </div>
+                  <div>
+                    <div class="flex justify-between text-sm mb-1.5"><span class="font-medium text-slate-700">การฟื้นฟูสมรรถภาพ</span><span class="font-bold text-indigo-600">{{ dashboardStats.planCounts.rehab }} ราย</span></div>
+                    <div class="w-full bg-slate-100 rounded-full h-2.5"><div class="bg-indigo-500 h-2.5 rounded-full" :style="`width: ${records.length ? (dashboardStats.planCounts.rehab/records.length)*100 : 0}%`"></div></div>
+                  </div>
+                  <div>
+                    <div class="flex justify-between text-sm mb-1.5"><span class="font-medium text-slate-700">จัดการทรัพยากร/พิทักษ์สิทธิ</span><span class="font-bold text-indigo-600">{{ dashboardStats.planCounts.resource }} ราย</span></div>
+                    <div class="w-full bg-slate-100 rounded-full h-2.5"><div class="bg-indigo-500 h-2.5 rounded-full" :style="`width: ${records.length ? (dashboardStats.planCounts.resource/records.length)*100 : 0}%`"></div></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="bg-white p-6 rounded-2xl shadow-sm border flex flex-col">
+                <h3 class="text-lg font-bold text-slate-800 mb-5"><i class="fa-solid fa-clock-rotate-left text-teal-600 mr-2"></i>สถิติประวัติการให้บริการ (จำแนกตามจำนวนครั้ง)</h3>
+                <div class="space-y-3 overflow-y-auto pr-2 no-scrollbar flex-1 max-h-[250px]">
+                  <div v-if="dashboardStats.serviceHistories.length === 0" class="text-sm text-slate-400 italic text-center py-8 bg-slate-50 rounded-xl border border-dashed">
+                    ยังไม่มีข้อมูลประวัติการให้บริการ
+                  </div>
+                  <div v-for="(service, i) in dashboardStats.serviceHistories" :key="i" class="flex items-center justify-between p-3.5 bg-slate-50 rounded-xl border border-slate-100 hover:border-teal-200 transition-colors">
+                    <span class="text-sm font-medium text-slate-700 truncate pr-4">{{ service.name }}</span>
+                    <span class="px-3 py-1 bg-teal-100 text-teal-700 rounded-lg text-xs font-bold whitespace-nowrap">{{ service.count }} ครั้ง</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div v-show="backendTab === 'users' && userRole === 'admin'" class="space-y-6">
+            <div class="bg-white rounded-2xl shadow-sm p-6 border">
+              <h2 class="text-xl font-semibold mb-4"><i class="fa-solid fa-user-plus text-teal-600"></i> เพิ่มผู้ใช้งาน</h2>
+              <div class="flex flex-col sm:flex-row gap-4">
+                <input type="text" v-model="newUser.username" placeholder="Username" class="border p-2 rounded w-full focus:ring-teal-500">
+                <input type="password" v-model="newUser.password" placeholder="Password (อย่างน้อย 6 ตัวอักษร)" class="border p-2 rounded w-full focus:ring-teal-500">
+                <select v-model="newUser.role" class="border p-2 rounded w-full focus:ring-teal-500 bg-white">
+                  <option value="admin">Admin (จัดการได้ทุกอย่าง)</option>
+                  <option value="viewer">Viewer (ดูข้อมูลเท่านั้น)</option>
+                </select>
+                <button @click="handleAddUser" :disabled="isUserSaving" class="bg-slate-800 hover:bg-slate-900 text-white px-6 py-2 rounded font-medium whitespace-nowrap disabled:bg-slate-400">เพิ่มผู้ใช้</button>
+              </div>
+            </div>
+
+            <div class="bg-white rounded-2xl shadow-sm p-6 border">
+              <h2 class="text-xl font-semibold mb-4"><i class="fa-solid fa-users text-teal-600"></i> รายชื่อผู้ใช้ระบบ</h2>
+              <table class="w-full text-sm text-left">
+                <thead class="bg-slate-100">
+                  <tr>
+                    <th class="p-3 rounded-tl-lg">Username</th>
+                    <th class="p-3">สิทธิ์การใช้งาน</th>
+                    <th class="p-3 text-center rounded-tr-lg">จัดการ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="user in usersList" :key="user.username" class="border-b hover:bg-slate-50">
+                    <td class="p-3 font-medium">{{user.username}}</td>
+                    <td class="p-3">
+                      <span v-if="user.role === 'admin'" class="px-2 py-1 bg-indigo-100 text-indigo-700 text-xs rounded-md">Admin</span>
+                      <span v-else class="px-2 py-1 bg-slate-100 text-slate-600 text-xs rounded-md">Viewer</span>
+                    </td>
+                    <td class="p-3 text-center flex justify-center gap-2">
+                      <button @click="handleResetPassword(user.username)" class="text-indigo-500 hover:text-indigo-700 px-3 py-1 bg-indigo-50 rounded-md text-xs"><i class="fa-solid fa-key mr-1"></i>รีเซ็ตรหัสผ่าน</button>
+                      <button v-if="user.username !== 'admin'" @click="handleDeleteUser(user.username)" class="text-rose-500 hover:text-rose-700 px-3 py-1 bg-rose-50 rounded-md text-xs">ลบ</button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              <p class="text-xs text-slate-400 mt-3"><i class="fa-solid fa-shield-halved mr-1"></i>เพื่อความปลอดภัย ระบบไม่แสดงรหัสผ่านเดิมของผู้ใช้ ใช้ปุ่ม "รีเซ็ตรหัสผ่าน" หากต้องการตั้งรหัสใหม่</p>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <div v-if="isModalOpen" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm no-print">
+        <div id="printArea" class="bg-white rounded-2xl shadow-xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh] animate-[fadeIn_0.2s_ease-in-out]">
+
+          <div class="px-6 py-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+            <div>
+              <h3 class="text-lg font-bold text-slate-800"><i class="fa-solid fa-folder-open text-indigo-600 mr-2"></i>แฟ้มข้อมูลผู้รับบริการ</h3>
+              <p class="text-sm text-slate-500 mt-1">HN: <span class="font-medium text-slate-800">{{ editingRecord.hn }}</span> | ประเมินเมื่อ: {{ editingRecord.date }}</p>
+            </div>
+            <div class="flex items-center gap-2 no-print">
+              <button @click="printRecord" class="text-slate-400 hover:text-teal-600 w-8 h-8 rounded-full hover:bg-teal-50 flex items-center justify-center" title="พิมพ์/บันทึกเป็น PDF"><i class="fa-solid fa-print"></i></button>
+              <button @click="closeManageModal" class="text-slate-400 hover:text-rose-500 w-8 h-8 rounded-full hover:bg-rose-50 flex items-center justify-center"><i class="fa-solid fa-times text-xl"></i></button>
+            </div>
+          </div>
+
+          <div class="flex border-b border-slate-200 bg-white px-6 no-print overflow-x-auto no-scrollbar">
+            <button @click="modalSubTab = 'answers'" :class="['px-5 py-3 font-medium text-sm transition-colors border-b-2 whitespace-nowrap', modalSubTab === 'answers' ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-500 hover:text-slate-800']">1. แบบประเมินที่ตอบ</button>
+            <button @click="modalSubTab = 'plan'" :class="['px-5 py-3 font-medium text-sm transition-colors border-b-2 whitespace-nowrap', modalSubTab === 'plan' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-800']">2. วางแผนบริการทางสังคม</button>
+            <button @click="modalSubTab = 'service'" :class="['px-5 py-3 font-medium text-sm transition-colors border-b-2 whitespace-nowrap', modalSubTab === 'service' ? 'border-teal-600 text-teal-700' : 'border-transparent text-slate-500 hover:text-slate-800']">3. บันทึกการให้บริการ (ประวัติ)</button>
+          </div>
+
+          <div class="p-6 overflow-y-auto no-scrollbar flex-1 bg-slate-50">
+
+            <div v-show="modalSubTab === 'answers'" class="space-y-6">
+              <div v-if="isLoadingAssessment" class="text-center py-16 text-slate-400"><i class="fa-solid fa-spinner fa-spin text-2xl"></i></div>
+              <div v-else-if="!assessmentDetail" class="text-center py-16 text-slate-400 italic bg-white rounded-xl border border-dashed border-slate-300">
+                ไม่พบข้อมูลคำตอบรายข้อของแบบประเมินนี้ (อาจเป็นข้อมูลเก่าก่อนระบบเริ่มบันทึกคำตอบรายข้อ)
+              </div>
+              <template v-else>
+                <div class="bg-white rounded-xl border border-slate-200 p-5">
+                  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 pb-3 border-b">
+                    <h4 class="font-semibold text-slate-800"><i class="fa-solid fa-clipboard-list text-blue-600 mr-2"></i>M.H.S.C.A (การดูแลสุขภาพจิตตนเอง)</h4>
+                    <span :class="['px-3 py-1 rounded-full text-sm font-semibold border w-max', mhscaResultClass(editingRecord.mhscaScore)]">{{ editingRecord.mhscaScore }} คะแนน - {{ editingRecord.mhscaResult }}</span>
+                  </div>
+                  <div class="space-y-2">
+                    <div v-for="(q, idx) in mhscaQuestions" :key="idx" class="flex items-center justify-between gap-4 p-3 rounded-lg bg-slate-50 border border-slate-100">
+                      <span class="text-sm text-slate-700">{{ idx + 1 }}. {{ q }}</span>
+                      <span :class="['px-3 py-1 rounded-lg text-sm font-bold border shrink-0', mhscaBadgeClass(assessmentDetail.mhscaRaw[idx])]">{{ assessmentDetail.mhscaRaw[idx] }}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="bg-white rounded-xl border border-slate-200 p-5">
+                  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 pb-3 border-b">
+                    <h4 class="font-semibold text-slate-800"><i class="fa-solid fa-heart-pulse text-rose-500 mr-2"></i>ST5 (ความเครียด)</h4>
+                    <span :class="['px-3 py-1 rounded-full text-sm font-semibold border w-max', st5ResultClass(editingRecord.st5Score)]">{{ editingRecord.st5Score }} คะแนน - {{ editingRecord.st5Result }}</span>
+                  </div>
+                  <div class="space-y-2">
+                    <div v-for="(q, idx) in st5Questions" :key="idx" class="flex items-center justify-between gap-4 p-3 rounded-lg bg-slate-50 border border-slate-100">
+                      <span class="text-sm text-slate-700">{{ idx + 1 }}. {{ q }}</span>
+                      <span :class="['px-3 py-1 rounded-lg text-sm font-bold border shrink-0 whitespace-nowrap', st5BadgeClass(assessmentDetail.st5Raw[idx])]">{{ assessmentDetail.st5Raw[idx] }} - {{ st5Labels[assessmentDetail.st5Raw[idx]] || '' }}</span>
+                    </div>
+                  </div>
+                </div>
+              </template>
+            </div>
+
+            <div v-show="modalSubTab === 'plan'" class="space-y-4">
+              <div v-for="(plan, key) in planOptions" :key="key" :class="['p-4 rounded-xl border transition-all', plans[key].selected ? 'bg-indigo-50/50 border-indigo-200' : 'bg-white border-slate-200']">
+                <label class="flex items-start gap-3 cursor-pointer mb-2">
+                  <input type="checkbox" v-model="plans[key].selected" class="mt-1 w-5 h-5 rounded text-indigo-600 cursor-pointer"/>
+                  <span class="font-medium text-slate-700">{{ plan.label }}</span>
+                </label>
+                <div v-if="plans[key].selected" class="ml-8">
+                  <textarea v-model="plans[key].detail" :placeholder="plan.placeholder" class="w-full mt-2 rounded-lg border-slate-300 text-sm p-3 border bg-white focus:ring-indigo-500 focus:border-indigo-500" rows="2"></textarea>
+                </div>
+              </div>
+              <div class="mt-6 flex justify-end no-print">
+                <button @click="submitManagePlan" :disabled="savePlanStatus.loading" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl shadow-sm font-medium flex items-center gap-2 disabled:bg-slate-400">
+                  <template v-if="savePlanStatus.loading"><i class="fa-solid fa-spinner fa-spin"></i> บันทึก...</template>
+                  <template v-else><i class="fa-solid fa-save"></i> อัปเดตแผนบริการ</template>
+                </button>
+              </div>
+
+              <div class="mt-8 pt-6 border-t border-slate-200">
+                <h4 class="font-medium text-slate-800 mb-4 ml-1"><i class="fa-solid fa-clock-rotate-left text-slate-500 mr-2"></i>ประวัติการอัปเดตแผนบริการ</h4>
+                <div v-if="parsedPlanHistory.length > 0" class="space-y-4 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-slate-200">
+                  <div v-for="(log, idx) in parsedPlanHistory" :key="idx" class="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
+                    <div class="flex items-center justify-center w-10 h-10 rounded-full border-4 border-slate-50 bg-indigo-500 text-white shadow-sm shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10"><i class="fa-solid fa-check text-sm"></i></div>
+                    <div class="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] bg-white p-4 rounded-xl border shadow-sm relative hover:border-indigo-300 transition-colors">
+                      <div class="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2 mb-2 border-b border-slate-100 pb-2">
+                        <div class="text-[11px] font-bold text-indigo-600"><i class="fa-regular fa-clock mr-1"></i>{{ log.time }}</div>
+                        <div class="text-[10px] font-medium px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-md border border-indigo-100 whitespace-nowrap">{{ log.category }}</div>
+                      </div>
+                      <div class="text-sm text-slate-700 whitespace-pre-wrap">{{ log.detail }}</div>
+                    </div>
+                  </div>
+                </div>
+                <div v-else class="text-sm text-slate-400 italic text-center py-8 bg-white/50 rounded-xl border border-dashed border-slate-300">
+                  ยังไม่มีประวัติการอัปเดตแผน
+                </div>
+              </div>
+            </div>
+
+            <div v-show="modalSubTab === 'service'" class="space-y-6">
+              <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm no-print">
+                <h4 class="font-medium text-slate-800 mb-4"><i class="fa-solid fa-pen-nib text-teal-600 mr-2"></i>เพิ่มบันทึกการให้บริการครั้งใหม่</h4>
+                <div class="space-y-4">
+                  <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">หมวดหมู่บริการทางสังคม <span class="text-rose-500">*</span></label>
+                    <select v-model="newServiceCategory" class="w-full rounded-lg border border-slate-300 p-2.5 text-sm focus:ring-teal-500 focus:border-teal-500 bg-slate-50">
+                      <option value="">-- กรุณาเลือกประเภทการให้บริการ --</option>
+                      <option v-for="cat in serviceCategories" :key="cat" :value="cat">{{ cat }}</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">รายละเอียดการให้บริการ/ผลการติดตาม <span class="text-rose-500">*</span></label>
+                    <textarea v-model="newServiceDetail" rows="3" class="w-full rounded-lg border border-slate-300 p-3 text-sm focus:ring-teal-500 focus:border-teal-500 bg-slate-50" placeholder="พิมพ์รายละเอียดที่นี่..."></textarea>
+                  </div>
+                </div>
+                <div class="flex justify-end mt-4">
+                  <button @click="submitServiceRecord" :disabled="!newServiceCategory || !newServiceDetail || saveServiceStatus.loading" class="bg-teal-600 hover:bg-teal-700 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 disabled:bg-slate-300 disabled:cursor-not-allowed">
+                    <template v-if="saveServiceStatus.loading"><i class="fa-solid fa-spinner fa-spin"></i> บันทึกข้อมูล...</template>
+                    <template v-else><i class="fa-solid fa-plus"></i> บันทึกการให้บริการ</template>
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <h4 class="font-medium text-slate-800 mb-4 ml-1"><i class="fa-solid fa-clock-rotate-left text-slate-500 mr-2"></i>ประวัติการให้บริการที่ผ่านมา</h4>
+                <div v-if="parsedServiceHistory.length > 0" class="space-y-4 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-slate-200">
+                  <div v-for="(log, idx) in parsedServiceHistory" :key="idx" class="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
+                    <div class="flex items-center justify-center w-10 h-10 rounded-full border-4 border-slate-50 bg-teal-500 text-white shadow-sm shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10"><i class="fa-solid fa-check text-sm"></i></div>
+                    <div class="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] bg-white p-4 rounded-xl border shadow-sm relative hover:border-teal-300 transition-colors">
+                      <div class="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2 mb-2 border-b border-slate-100 pb-2">
+                        <div class="text-[11px] font-bold text-teal-600"><i class="fa-regular fa-clock mr-1"></i>{{ log.time }}</div>
+                        <div class="text-[10px] font-medium px-2 py-0.5 bg-teal-50 text-teal-700 rounded-md border border-teal-100 whitespace-nowrap">{{ log.category }}</div>
+                      </div>
+                      <div class="text-sm text-slate-700 whitespace-pre-wrap">{{ log.detail }}</div>
+                    </div>
+                  </div>
+                </div>
+                <div v-else class="text-sm text-slate-400 italic text-center py-8 bg-white/50 rounded-xl border border-dashed border-slate-300">
+                  ยังไม่มีประวัติการให้บริการ
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    const { createApp, ref, computed, onMounted, watch, nextTick } = Vue;
+
+    // ======================================================
+    // การตั้งค่า API (Google Apps Script Web App)
+    // ======================================================
+    // *** แก้ URL นี้เป็น URL ที่ได้จากการ Deploy > New deployment > Web app ของ Apps Script ***
+    // (ต้อง Deploy แบบ Execute as: Me, Who has access: Anyone มิฉะนั้น fetch() จากหน้านี้จะใช้งานไม่ได้)
+    const API_URL = 'https://script.google.com/macros/s/AKfycbwdPhGtnr1pE8XPTqluj5C_tkPG32SFKghccgDr-nRSqLXJnIyrqWJd2BBqIo7ulCf71A/exec';
+
+    /** เรียก action แบบอ่านข้อมูล (GET) — ส่งพารามิเตอร์ผ่าน query string */
+    async function apiGet(action, params = {}) {
+      const url = new URL(API_URL);
+      url.searchParams.set('action', action);
+      Object.keys(params).forEach(key => {
+        if (params[key] !== undefined && params[key] !== null) url.searchParams.set(key, params[key]);
+      });
+      const res = await fetch(url.toString(), { method: 'GET' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    }
+
+    /**
+     * เรียก action แบบเขียน/แก้ไขข้อมูล หรือมีข้อมูลอ่อนไหว (POST)
+     * ใช้ Content-Type: text/plain โดยตั้งใจ เพื่อให้ browser มองเป็น "simple request"
+     * และไม่ยิง CORS preflight (OPTIONS) ซึ่ง Apps Script Web App ไม่รองรับ
+     */
+    async function apiPost(action, payload = {}) {
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action, ...payload })
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    }
+
+    createApp({
+      setup() {
+        const topTab = ref('form');
+        const backendTab = ref('search');
+        const searchQuery = ref('');
+        const riskFilter = ref('all');
+        const records = ref([]);
+        const isLoadingRecords = ref(false);
+        const currentPage = ref(1);
+        const pageSize = 10;
+
+        // --- Toasts ---
+        const toasts = ref([]);
+        let toastId = 0;
+        const showToast = (type, message, duration = 3500) => {
+          const id = ++toastId;
+          toasts.value.push({ id, type, message });
+          setTimeout(() => dismissToast(id), duration);
+        };
+        const dismissToast = (id) => { toasts.value = toasts.value.filter(t => t.id !== id); };
+
+        // --- Auth & Roles ---
+        const SESSION_KEY = 'mhs_session_token';
+        const isLoggedIn = ref(false);
+        const isLoggingIn = ref(false);
+        const userRole = ref('');
+        const sessionToken = ref('');
+        const loginData = ref({ username: '', password: '' });
+        const loginError = ref('');
+        const showPassword = ref(false);
+
+        const handleLogin = async () => {
+          if (!loginData.value.username || !loginData.value.password) return;
+          isLoggingIn.value = true;
+          loginError.value = '';
+
+          try {
+            const res = await apiPost('checkLogin', { username: loginData.value.username, password: loginData.value.password });
+            isLoggingIn.value = false;
+            if (res.success) {
+              isLoggedIn.value = true;
+              userRole.value = res.role;
+              sessionToken.value = res.token;
+              sessionStorage.setItem(SESSION_KEY, res.token);
+              backendTab.value = 'search';
+              fetchRecords();
+              if (res.role === 'admin') fetchUsers();
+              showToast('success', `เข้าสู่ระบบสำเร็จ ยินดีต้อนรับ ${res.username}`);
+            } else {
+              loginError.value = res.message;
+            }
+          } catch (err) {
+            isLoggingIn.value = false;
+            loginError.value = "เชื่อมต่อ API ล้มเหลว กรุณาตรวจสอบอินเทอร์เน็ตหรือลองใหม่อีกครั้ง";
+          }
+        };
+
+        const logout = async () => {
+          if (sessionToken.value) {
+            try { await apiPost('logoutSession', { token: sessionToken.value }); } catch (err) { /* ignore */ }
+          }
+          sessionStorage.removeItem(SESSION_KEY);
+          isLoggedIn.value = false;
+          userRole.value = '';
+          sessionToken.value = '';
+          loginData.value = { username: '', password: '' };
+          topTab.value = 'backend';
+          showToast('info', 'ออกจากระบบเรียบร้อยแล้ว');
+        };
+
+        const restoreSession = async () => {
+          const token = sessionStorage.getItem(SESSION_KEY);
+          if (!token) return;
+          try {
+            const res = await apiGet('checkSession', { token });
+            if (res.valid) {
+              sessionToken.value = token;
+              isLoggedIn.value = true;
+              userRole.value = res.role;
+              fetchRecords();
+              if (res.role === 'admin') fetchUsers();
+            } else {
+              sessionStorage.removeItem(SESSION_KEY);
+            }
+          } catch (err) { /* เชื่อมต่อ API ไม่ได้ตอนเปิดหน้า - ปล่อยให้ผู้ใช้ล็อกอินใหม่ */ }
+        };
+
+        // --- Form ---
+        const formStep = ref(1);
+        const form = ref({ hn: '', age: '', gender: '', status: '' });
+        const mhscaAnswers = ref({});
+        const st5Answers = ref({});
+        const submitStatus = ref({ loading: false, success: false, error: null });
+        const hnCheck = ref({ found: false });
+
+        const step1Valid = computed(() => form.value.hn && form.value.age && form.value.gender && form.value.status);
+        const goToStep = (n) => {
+          if (n === 2 && !step1Valid.value) return;
+          if (n === 3 && !mhsca.value.isComplete) return;
+          if (n === 4 && !st5.value.isComplete) return;
+          formStep.value = n;
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        };
+
+        const onHNBlur = async () => {
+          if (!form.value.hn) { hnCheck.value = { found: false }; return; }
+          try {
+            const res = await apiGet('checkHNDuplicate', { hn: form.value.hn });
+            hnCheck.value = res;
+          } catch (err) { /* เช็ค HN ซ้ำไม่ได้ ไม่ใช่ error ร้ายแรง ปล่อยผ่าน */ }
+        };
+
+        const mhscaQuestions = [
+          "ท่านรู้สึกภูมิใจในตนเอง เมื่อนึกถึงสิ่งดี ๆ ที่ทำได้สำเร็จ",
+          "ท่านสามารถทำสิ่งต่าง ๆ ได้ดีต่างจากคนอื่นและรู้สึกเท่าเทียมกับผู้อื่น",
+          "ท่านแก้ไขคลี่คลายเรื่องราวยุ่งยากลำบากใจได้",
+          "ท่านเคารพและเชื่อมั่นในศักดิ์ศรีตนเองและผู้อื่น",
+          "ท่านเลือกแนวทางดำเนินชีวิตได้ด้วยตนเอง",
+          "ท่านมีทางเลือกในการตัดสินใจแก้ปัญหาได้หลายทาง",
+          "ท่านสามารถวางแผนดำเนินชีวิตตนเองได้อย่างเหมาะสม",
+          "ท่านสามารถยอมรับเรื่องราวที่เกิดขึ้นในชีวิตไม่ว่าดีหรือไม่ดีได้",
+          "ท่านเป็นผู้สร้างความสุข ความทุกข์ให้ตนเอง",
+          "ท่านรู้สึกจิตใจสงบ เป็นสุข และอิสระ",
+          "ท่านเคารพการตัดสินใจของตนเองและผู้อื่น",
+          "ท่านใช้ชีวิตอย่างเหมาะสมตามความต้องการแท้จริงของตนเอง",
+          "ท่านมีความหวังในการแก้ไขปัญหาเสมอ",
+          "ท่านยอมรับความรู้สึกไม่ดีของตนเองและผู้อื่นได้",
+          "ท่านชื่นชมตนเอง รู้สึกมีคุณค่า ให้กำลังใจตนเองและผู้อื่นได้"
+        ];
+
+        const st5Questions = [
+          "มีปัญหาการนอน นอนไม่หลับหรือนอนมาก",
+          "มีสมาธิน้อยลง",
+          "หงุดหงิด / กระวนกระวาย / ว้าวุ้นใจ",
+          "รู้สึกเบื่อ เซ็ง",
+          "ไม่อยากพบปะผู้คน"
+        ];
+
+        const mhsca = computed(() => {
+          let score = 0, count = 0;
+          for (let key in mhscaAnswers.value) { score += mhscaAnswers.value[key]; count++; }
+          let meaning = "รอประเมินครบ", colorClass = "bg-slate-100 text-slate-500 border-slate-200";
+          if (count === 15) {
+            if (score >= 64) { meaning = "ดูแลสุขภาพจิตได้มากที่สุด"; colorClass = "bg-green-100 text-green-800 border-green-300"; }
+            else if (score >= 52) { meaning = "ดูแลสุขภาพจิตได้มาก"; colorClass = "bg-teal-100 text-teal-800 border-teal-300"; }
+            else if (score >= 40) { meaning = "ดูแลสุขภาพจิตได้ปานกลาง"; colorClass = "bg-yellow-100 text-yellow-800 border-yellow-300"; }
+            else if (score >= 28) { meaning = "ดูแลสุขภาพจิตได้น้อย"; colorClass = "bg-amber-100 text-amber-800 border-amber-300"; }
+            else { meaning = "ดูแลสุขภาพจิตได้น้อยที่สุด"; colorClass = "bg-rose-100 text-rose-800 border-rose-300"; }
+          }
+          return { score, meaning, isComplete: count === 15, count, colorClass };
+        });
+
+        const st5 = computed(() => {
+          let score = 0, count = 0;
+          for (let key in st5Answers.value) { score += st5Answers.value[key]; count++; }
+          let meaning = "รอประเมินครบ", colorClass = "bg-slate-100 text-slate-500 border-slate-200";
+          if (count === 5) {
+            if (score >= 10) { meaning = "เครียดมากที่สุด"; colorClass = "bg-rose-100 text-rose-800 border-rose-300"; }
+            else if (score >= 8) { meaning = "เครียดมาก"; colorClass = "bg-amber-100 text-amber-800 border-amber-300"; }
+            else if (score >= 5) { meaning = "เครียดปานกลาง"; colorClass = "bg-yellow-100 text-yellow-800 border-yellow-300"; }
+            else { meaning = "เครียดน้อย"; colorClass = "bg-green-100 text-green-800 border-green-300"; }
+          }
+          return { score, meaning, isComplete: count === 5, count, colorClass };
+        });
+
+        // --- Draft autosave ---
+        const DRAFT_KEY = 'mhs_form_draft';
+        const hasDraft = ref(false);
+        const draftDismissed = ref(false);
+
+        const saveDraft = () => {
+          const draft = { form: form.value, mhscaAnswers: mhscaAnswers.value, st5Answers: st5Answers.value, formStep: formStep.value };
+          localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+        };
+        const restoreDraft = () => {
+          const raw = localStorage.getItem(DRAFT_KEY);
+          if (!raw) return;
+          try {
+            const draft = JSON.parse(raw);
+            form.value = draft.form || form.value;
+            mhscaAnswers.value = draft.mhscaAnswers || {};
+            st5Answers.value = draft.st5Answers || {};
+            formStep.value = draft.formStep || 1;
+          } catch (e) {}
+          draftDismissed.value = true;
+        };
+        const discardDraft = () => {
+          localStorage.removeItem(DRAFT_KEY);
+          hasDraft.value = false;
+          draftDismissed.value = true;
+        };
+        let draftTimer = null;
+        watch([form, mhscaAnswers, st5Answers], () => {
+          clearTimeout(draftTimer);
+          draftTimer = setTimeout(saveDraft, 800);
+        }, { deep: true });
+
+        const submitForm = async () => {
+          if (!form.value.hn || !form.value.age || !form.value.gender || !form.value.status) return showToast('error', 'กรุณากรอกข้อมูลให้ครบถ้วน');
+          if (!mhsca.value.isComplete || !st5.value.isComplete) return showToast('error', 'กรุณาทำแบบประเมินให้ครบทุกข้อ');
+
+          submitStatus.value = { loading: true, success: false, error: null };
+
+          const mhscaRawArray = Array.from({ length: 15 }, (_, i) => mhscaAnswers.value[i] !== undefined ? mhscaAnswers.value[i] : "-");
+          const st5RawArray = Array.from({ length: 5 }, (_, i) => st5Answers.value[i] !== undefined ? st5Answers.value[i] : "-");
+
+          const payload = {
+            ...form.value,
+            mhscaScore: mhsca.value.score,
+            mhscaResult: mhsca.value.meaning,
+            st5Score: st5.value.score,
+            st5Result: st5.value.meaning,
+            mhscaRaw: mhscaRawArray,
+            st5Raw: st5RawArray
+          };
+
+          try {
+            const res = await apiPost('saveData', payload);
+            if (res.success) {
+              submitStatus.value = { loading: false, success: true, error: null };
+              showToast('success', 'บันทึกข้อมูลประเมินเรียบร้อยแล้ว');
+              discardDraft();
+              setTimeout(() => {
+                form.value = { hn: '', age: '', gender: '', status: '' };
+                mhscaAnswers.value = {};
+                st5Answers.value = {};
+                submitStatus.value.success = false;
+                formStep.value = 1;
+                hnCheck.value = { found: false };
+              }, 1500);
+            } else {
+              submitStatus.value = { loading: false, success: false, error: res.message };
+              showToast('error', res.message);
+            }
+          } catch (err) {
+            submitStatus.value = { loading: false, success: false, error: "เชื่อมต่อ API ล้มเหลว" };
+            showToast('error', 'เชื่อมต่อ API ล้มเหลว กรุณาลองใหม่อีกครั้ง');
+          }
+        };
+
+        // --- Backend Data ---
+        const filteredRecords = computed(() => {
+          let list = records.value;
+          if (searchQuery.value) {
+            const q = searchQuery.value.toLowerCase();
+            list = list.filter(r => r.hn.toLowerCase().includes(q) || (r.status || '').toLowerCase().includes(q));
+          }
+          if (riskFilter.value === 'highStress') list = list.filter(r => r.st5Score >= 5);
+          else if (riskFilter.value === 'lowMental') list = list.filter(r => r.mhscaScore < 52);
+          else if (riskFilter.value === 'noPlan') list = list.filter(r =>
+            (!r.planAssessmentDetail || r.planAssessmentDetail === '-') &&
+            (!r.planTherapyDetail || r.planTherapyDetail === '-') &&
+            (!r.planRehabDetail || r.planRehabDetail === '-') &&
+            (!r.planResourceDetail || r.planResourceDetail === '-'));
+          return list;
+        });
+
+        const totalPages = computed(() => Math.max(1, Math.ceil(filteredRecords.value.length / pageSize)));
+        const paginatedRecords = computed(() => {
+          const start = (currentPage.value - 1) * pageSize;
+          return filteredRecords.value.slice(start, start + pageSize);
+        });
+        watch([searchQuery, riskFilter], () => { currentPage.value = 1; });
+
+        const exportCSV = () => {
+          const headers = ['วันที่ประเมิน', 'HN', 'อายุ', 'เพศ', 'สถานะ', 'คะแนน MHSCA', 'แปลผล MHSCA', 'คะแนน ST5', 'แปลผล ST5'];
+          const rows = filteredRecords.value.map(r => [r.date, r.hn, r.age, r.gender, r.status, r.mhscaScore, r.mhscaResult, r.st5Score, r.st5Result]);
+          const csv = '\uFEFF' + [headers, ...rows].map(row => row.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+          const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(blob);
+          link.download = `mental-health-records-${new Date().toISOString().slice(0,10)}.csv`;
+          link.click();
+          showToast('success', 'ส่งออกไฟล์ CSV เรียบร้อยแล้ว');
+        };
+
+        const dashboardStats = computed(() => {
+          let highStress = 0;
+          let lowMental = 0;
+          let planCounts = { assessment: 0, therapy: 0, rehab: 0, resource: 0 };
+          let serviceCategoriesCount = {};
+
+          records.value.forEach(r => {
+            if (r.st5Score >= 5) highStress++;
+            if (r.mhscaScore < 52) lowMental++;
+
+            if (r.planAssessmentDetail && r.planAssessmentDetail !== '-') planCounts.assessment++;
+            if (r.planTherapyDetail && r.planTherapyDetail !== '-') planCounts.therapy++;
+            if (r.planRehabDetail && r.planRehabDetail !== '-') planCounts.rehab++;
+            if (r.planResourceDetail && r.planResourceDetail !== '-') planCounts.resource++;
+
+            if (r.serviceHistory && r.serviceHistory !== '-') {
+              const entries = r.serviceHistory.split('\n\n');
+              entries.forEach(entry => {
+                const match = entry.match(/^\[(.*?)\]\s(?:\|(.*?)\|\s)?([\s\S]*)$/);
+                const category = (match && match[2]) ? match[2] : 'บันทึกทั่วไป';
+                if (category !== 'อัปเดตแผน' && category !== 'อัปเดตแผนบริการ') {
+                  serviceCategoriesCount[category] = (serviceCategoriesCount[category] || 0) + 1;
+                }
+              });
+            }
+          });
+
+          const serviceHistories = Object.entries(serviceCategoriesCount)
+            .map(([name, count]) => ({ name, count }))
+            .sort((a, b) => b.count - a.count);
+
+          return { highStress, lowMental, planCounts, serviceHistories };
+        });
+
+        // --- Trend chart ---
+        const trendChartCanvas = ref(null);
+        let trendChartInstance = null;
+
+        const parseThaiDate = (str) => {
+          // toLocaleString("th-TH") -> "d/m/พ.ศ., HH:mm:ss" (พ.ศ. = ค.ศ. + 543)
+          if (!str) return null;
+          const datePart = str.split(',')[0].trim();
+          const parts = datePart.split('/');
+          if (parts.length !== 3) return null;
+          const day = parseInt(parts[0], 10), month = parseInt(parts[1], 10), yearBE = parseInt(parts[2], 10);
+          if (!day || !month || !yearBE) return null;
+          return { year: yearBE - 543, month };
+        };
+
+        const THAI_MONTHS_ABBR = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+
+        const buildTrendChart = () => {
+          if (!trendChartCanvas.value || typeof Chart === 'undefined') return;
+          const monthly = {};
+          records.value.forEach(r => {
+            const d = parseThaiDate(r.date);
+            if (!d) return;
+            const key = `${d.year}-${String(d.month).padStart(2, '0')}`;
+            if (!monthly[key]) monthly[key] = { total: 0, highStress: 0, lowMental: 0 };
+            monthly[key].total++;
+            if (r.st5Score >= 5) monthly[key].highStress++;
+            if (r.mhscaScore < 52) monthly[key].lowMental++;
+          });
+
+          const keys = Object.keys(monthly).sort();
+          if (keys.length === 0) {
+            if (trendChartInstance) { trendChartInstance.destroy(); trendChartInstance = null; }
+            return;
+          }
+
+          // เติมเดือนที่ไม่มีข้อมูลให้ครบระหว่างเดือนแรกและเดือนล่าสุด เพื่อให้เห็นไทม์ไลน์ต่อเนื่อง (ค่าเป็น 0)
+          const [startY, startM] = keys[0].split('-').map(Number);
+          const [endY, endM] = keys[keys.length - 1].split('-').map(Number);
+          const continuousKeys = [];
+          let y = startY, m = startM;
+          while (y < endY || (y === endY && m <= endM)) {
+            continuousKeys.push(`${y}-${String(m).padStart(2, '0')}`);
+            m++;
+            if (m > 12) { m = 1; y++; }
+          }
+
+          // ใช้ปี พ.ศ. ให้สอดคล้องกับรูปแบบวันที่ที่ใช้ทั้งระบบ (ไม่ใช้ ISO ค.ศ.)
+          const labels = continuousKeys.map(k => {
+            const [ky, km] = k.split('-').map(Number);
+            return `${THAI_MONTHS_ABBR[km - 1]} ${ky + 543}`;
+          });
+          const totals = continuousKeys.map(k => monthly[k] ? monthly[k].total : 0);
+          const highStressData = continuousKeys.map(k => monthly[k] ? monthly[k].highStress : 0);
+          const lowMentalData = continuousKeys.map(k => monthly[k] ? monthly[k].lowMental : 0);
+
+          if (trendChartInstance) trendChartInstance.destroy();
+          trendChartInstance = new Chart(trendChartCanvas.value, {
+            type: 'bar',
+            data: {
+              labels,
+              datasets: [
+                { type: 'bar', label: 'ผู้รับบริการทั้งหมด', data: totals, backgroundColor: 'rgba(13,148,136,.25)', borderColor: '#0d9488', borderWidth: 1, borderRadius: 4, order: 2, maxBarThickness: 36 },
+                { type: 'line', label: 'เครียดปานกลางขึ้นไป', data: highStressData, borderColor: '#e11d48', backgroundColor: '#e11d48', tension: .3, order: 1, pointRadius: 4, pointHoverRadius: 6, borderWidth: 2 },
+                { type: 'line', label: 'สุขภาพจิตปานกลางลงมา', data: lowMentalData, borderColor: '#2563eb', backgroundColor: '#2563eb', tension: .3, order: 1, pointRadius: 4, pointHoverRadius: 6, borderWidth: 2 }
+              ]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { position: 'bottom' } },
+              scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+            }
+          });
+        };
+
+        watch(records, () => { nextTick(buildTrendChart); });
+        watch(backendTab, (val) => { if (val === 'dashboard') nextTick(buildTrendChart); });
+
+        const fetchRecords = async () => {
+          isLoadingRecords.value = true;
+          try {
+            const res = await apiGet('getRecords', { token: sessionToken.value });
+            if (Array.isArray(res)) {
+              records.value = res;
+            } else {
+              records.value = [];
+              showToast('error', (res && res.message) || 'โหลดข้อมูลไม่สำเร็จ อาจต้องเข้าสู่ระบบใหม่');
+            }
+            isLoadingRecords.value = false;
+          } catch (err) {
+            isLoadingRecords.value = false;
+            showToast('error', 'เชื่อมต่อ API ไม่สำเร็จ โปรดตรวจสอบอินเทอร์เน็ต');
+          }
+        };
+
+        // --- Modal Manage Plan & Services ---
+        const isModalOpen = ref(false);
+        const modalSubTab = ref('answers');
+        const editingRecord = ref(null);
+        const savePlanStatus = ref({ loading: false, error: null });
+        const assessmentDetail = ref(null);
+        const isLoadingAssessment = ref(false);
+
+        const st5Labels = { 0: 'แทบไม่มี', 1: 'บางครั้ง', 2: 'บ่อยครั้ง', 3: 'เป็นประจำ' };
+
+        const mhscaBadgeClass = (val) => {
+          const n = parseInt(val, 10);
+          if (isNaN(n)) return 'bg-slate-100 text-slate-400 border-slate-200';
+          if (n >= 5) return 'bg-green-100 text-green-700 border-green-300';
+          if (n === 4) return 'bg-teal-100 text-teal-700 border-teal-300';
+          if (n === 3) return 'bg-yellow-100 text-yellow-700 border-yellow-300';
+          if (n === 2) return 'bg-amber-100 text-amber-700 border-amber-300';
+          return 'bg-rose-100 text-rose-700 border-rose-300';
+        };
+        const st5BadgeClass = (val) => {
+          const n = parseInt(val, 10);
+          if (isNaN(n)) return 'bg-slate-100 text-slate-400 border-slate-200';
+          if (n === 0) return 'bg-green-100 text-green-700 border-green-300';
+          if (n === 1) return 'bg-yellow-100 text-yellow-700 border-yellow-300';
+          if (n === 2) return 'bg-amber-100 text-amber-700 border-amber-300';
+          return 'bg-rose-100 text-rose-700 border-rose-300';
+        };
+        const mhscaResultClass = (score) => {
+          if (score >= 64) return 'bg-green-100 text-green-800 border-green-300';
+          if (score >= 52) return 'bg-teal-100 text-teal-800 border-teal-300';
+          if (score >= 40) return 'bg-yellow-100 text-yellow-800 border-yellow-300';
+          if (score >= 28) return 'bg-amber-100 text-amber-800 border-amber-300';
+          return 'bg-rose-100 text-rose-800 border-rose-300';
+        };
+        const st5ResultClass = (score) => {
+          if (score >= 10) return 'bg-rose-100 text-rose-800 border-rose-300';
+          if (score >= 8) return 'bg-amber-100 text-amber-800 border-amber-300';
+          if (score >= 5) return 'bg-yellow-100 text-yellow-800 border-yellow-300';
+          return 'bg-green-100 text-green-800 border-green-300';
+        };
+
+        const fetchAssessmentDetail = async (record) => {
+          isLoadingAssessment.value = true;
+          assessmentDetail.value = null;
+          try {
+            const res = await apiGet('getAssessmentDetail', { date: record.date, hn: record.hn, token: sessionToken.value });
+            isLoadingAssessment.value = false;
+            assessmentDetail.value = (res && res.success === false) ? null : res;
+          } catch (err) {
+            isLoadingAssessment.value = false;
+          }
+        };
+
+        const planOptions = {
+          assessment: { label: 'การประเมินและวินิจฉัยทางสังคม', placeholder: 'รายละเอียด...' },
+          therapy: { label: 'การบำบัดทางสังคม', placeholder: 'รายละเอียด...' },
+          rehab: { label: 'การฟื้นฟูสมรรถภาพทางสังคม', placeholder: 'รายละเอียด...' },
+          resource: { label: 'การจัดการทรัพยากรทางสังคมและพิทักษ์สิทธิ', placeholder: 'รายละเอียด...' }
+        };
+        const plans = ref({
+          assessment: { selected: false, detail: '' },
+          therapy: { selected: false, detail: '' },
+          rehab: { selected: false, detail: '' },
+          resource: { selected: false, detail: '' }
+        });
+
+        const newServiceCategory = ref('');
+        const newServiceDetail = ref('');
+        const saveServiceStatus = ref({ loading: false, error: null });
+        const serviceCategories = [
+          'การประเมินและวินิจฉัยทางสังคม', 'การบำบัดทางสังคม', 'การฟื้นฟูสมรรถภาพทางสังคม',
+          'การจัดการทรัพยากรทางสังคมและพิทักษ์สิทธิ'
+        ];
+
+        const openManageModal = (record) => {
+          editingRecord.value = record;
+          modalSubTab.value = 'answers';
+          newServiceCategory.value = '';
+          newServiceDetail.value = '';
+          fetchAssessmentDetail(record);
+
+          const mapPlan = (field) => {
+            const capField = field.charAt(0).toUpperCase() + field.slice(1);
+            plans.value[field].selected = record['plan' + capField + 'Detail'] && record['plan' + capField + 'Detail'] !== '-';
+            plans.value[field].detail = plans.value[field].selected ? record['plan' + capField + 'Detail'] : '';
+          };
+          ['assessment', 'therapy', 'rehab', 'resource'].forEach(mapPlan);
+
+          isModalOpen.value = true;
+        };
+
+        const closeManageModal = () => {
+          isModalOpen.value = false;
+          editingRecord.value = null;
+        };
+
+        const printRecord = () => { window.print(); };
+
+        const parsedPlanHistory = computed(() => {
+          if (!editingRecord.value || !editingRecord.value.planHistory || editingRecord.value.planHistory === '-') return [];
+          const entries = editingRecord.value.planHistory.split('\n\n');
+          return entries.map(entry => {
+            const match = entry.match(/^\[(.*?)\]\s(?:\|(.*?)\|\s)?\n?([\s\S]*)$/);
+            if (match) return { time: match[1], category: match[2] || 'อัปเดตแผน', detail: match[3] };
+            return { time: '', category: 'อัปเดตแผน', detail: entry };
+          }).reverse();
+        });
+
+        const submitManagePlan = async () => {
+          savePlanStatus.value = { loading: true, error: null };
+          let summaryText = [];
+          if (plans.value.assessment.selected) summaryText.push(`- ประเมิน: ${plans.value.assessment.detail || 'มีแผนแต่ไม่ระบุรายละเอียด'}`);
+          if (plans.value.therapy.selected) summaryText.push(`- บำบัด: ${plans.value.therapy.detail || 'มีแผนแต่ไม่ระบุรายละเอียด'}`);
+          if (plans.value.rehab.selected) summaryText.push(`- ฟื้นฟู: ${plans.value.rehab.detail || 'มีแผนแต่ไม่ระบุรายละเอียด'}`);
+          if (plans.value.resource.selected) summaryText.push(`- ทรัพยากร: ${plans.value.resource.detail || 'มีแผนแต่ไม่ระบุรายละเอียด'}`);
+
+          const planSummaryStr = summaryText.length > 0 ? summaryText.join('\n') : "ไม่มีแผนบริการ / ยกเลิกแผนทั้งหมด";
+
+          const payload = {
+            token: sessionToken.value,
+            rowNumber: editingRecord.value.rowNumber,
+            planAssessmentDetail: plans.value.assessment.selected ? plans.value.assessment.detail || '-' : '-',
+            planTherapyDetail: plans.value.therapy.selected ? plans.value.therapy.detail || '-' : '-',
+            planRehabDetail: plans.value.rehab.selected ? plans.value.rehab.detail || '-' : '-',
+            planResourceDetail: plans.value.resource.selected ? plans.value.resource.detail || '-' : '-',
+            planSummary: planSummaryStr
+          };
+
+          try {
+            const res = await apiPost('updatePlan', payload);
+            savePlanStatus.value.loading = false;
+            if (res.success) {
+              editingRecord.value.planHistory = res.newPlanHistory;
+              const rec = records.value.find(r => r.rowNumber === payload.rowNumber);
+              if (rec) {
+                rec.planHistory = res.newPlanHistory;
+                rec.planAssessmentDetail = payload.planAssessmentDetail;
+                rec.planTherapyDetail = payload.planTherapyDetail;
+                rec.planRehabDetail = payload.planRehabDetail;
+                rec.planResourceDetail = payload.planResourceDetail;
+              }
+              showToast('success', 'อัปเดตแผนบริการเรียบร้อย');
+            } else showToast('error', res.message);
+          } catch (err) {
+            savePlanStatus.value.loading = false;
+            showToast('error', 'บันทึกไม่สำเร็จ กรุณาเข้าสู่ระบบใหม่');
+          }
+        };
+
+        const parsedServiceHistory = computed(() => {
+          if (!editingRecord.value || !editingRecord.value.serviceHistory || editingRecord.value.serviceHistory === '-') return [];
+          const entries = editingRecord.value.serviceHistory.split('\n\n');
+          return entries.map(entry => {
+            const match = entry.match(/^\[(.*?)\]\s(?:\|(.*?)\|\s)?([\s\S]*)$/);
+            if (match) return { time: match[1], category: match[2] || 'บันทึกทั่วไป', detail: match[3] };
+            return { time: '', category: 'บันทึกทั่วไป', detail: entry };
+          }).reverse();
+        });
+
+        const submitServiceRecord = async () => {
+          if (!newServiceCategory.value || !newServiceDetail.value) return;
+          saveServiceStatus.value = { loading: true, error: null };
+
+          const payload = {
+            token: sessionToken.value,
+            rowNumber: editingRecord.value.rowNumber,
+            serviceCategory: newServiceCategory.value,
+            serviceDetail: newServiceDetail.value
+          };
+
+          try {
+            const res = await apiPost('addServiceRecord', payload);
+            saveServiceStatus.value.loading = false;
+            if (res.success) {
+              editingRecord.value.serviceHistory = res.newHistory;
+              newServiceCategory.value = '';
+              newServiceDetail.value = '';
+              const rec = records.value.find(r => r.rowNumber === payload.rowNumber);
+              if (rec) rec.serviceHistory = res.newHistory;
+              showToast('success', 'บันทึกการให้บริการเรียบร้อยแล้ว');
+            } else { showToast('error', res.message); }
+          } catch (err) {
+            saveServiceStatus.value.loading = false;
+            showToast('error', 'บันทึกไม่สำเร็จ กรุณาเข้าสู่ระบบใหม่');
+          }
+        };
+
+        // --- Users Management ---
+        const usersList = ref([]);
+        const isUserLoading = ref(false);
+        const isUserSaving = ref(false);
+        const newUser = ref({ username: '', password: '', role: 'viewer' });
+
+        const fetchUsers = async () => {
+          isUserLoading.value = true;
+          try {
+            const res = await apiGet('getUsers', { token: sessionToken.value });
+            usersList.value = Array.isArray(res) ? res : [];
+            isUserLoading.value = false;
+            if (!Array.isArray(res)) showToast('error', (res && res.message) || 'โหลดรายชื่อผู้ใช้ไม่สำเร็จ');
+          } catch (err) {
+            isUserLoading.value = false;
+            showToast('error', 'เชื่อมต่อ API ไม่สำเร็จ');
+          }
+        };
+
+        const handleAddUser = async () => {
+          if (!newUser.value.username || !newUser.value.password) return;
+          isUserSaving.value = true;
+          try {
+            const res = await apiPost('addUser', { username: newUser.value.username, password: newUser.value.password, role: newUser.value.role, token: sessionToken.value });
+            isUserSaving.value = false;
+            if (res.success) {
+              newUser.value = { username: '', password: '', role: 'viewer' };
+              fetchUsers();
+              showToast('success', 'เพิ่มผู้ใช้งานเรียบร้อยแล้ว');
+            } else showToast('error', res.message);
+          } catch (err) {
+            isUserSaving.value = false;
+            showToast('error', 'บันทึกไม่สำเร็จ');
+          }
+        };
+
+        const handleResetPassword = async (username) => {
+          const newPassword = prompt(`ตั้งรหัสผ่านใหม่สำหรับ "${username}" (อย่างน้อย 6 ตัวอักษร):`);
+          if (!newPassword) return;
+          try {
+            const res = await apiPost('resetUserPassword', { username, newPassword, token: sessionToken.value });
+            if (res.success) showToast('success', res.message);
+            else showToast('error', res.message);
+          } catch (err) {
+            showToast('error', 'เชื่อมต่อ API ไม่สำเร็จ');
+          }
+        };
+
+        const handleDeleteUser = async (username) => {
+          if (!confirm(`ลบบัญชี ${username}?`)) return;
+          try {
+            const res = await apiPost('deleteUser', { username, token: sessionToken.value });
+            if (res.success) { fetchUsers(); showToast('success', 'ลบผู้ใช้งานเรียบร้อยแล้ว'); }
+            else showToast('error', res.message);
+          } catch (err) {
+            showToast('error', 'เชื่อมต่อ API ไม่สำเร็จ');
+          }
+        };
+
+        onMounted(() => {
+          restoreSession();
+          if (localStorage.getItem(DRAFT_KEY)) hasDraft.value = true;
+        });
+
+        return {
+          topTab, backendTab, searchQuery, riskFilter, records, isLoadingRecords, currentPage, pageSize, totalPages, paginatedRecords,
+          toasts, dismissToast,
+          isLoggedIn, isLoggingIn, userRole, loginData, loginError, showPassword, handleLogin, logout,
+          formStep, goToStep, step1Valid, hnCheck, onHNBlur,
+          hasDraft, draftDismissed, restoreDraft, discardDraft,
+          form, mhscaAnswers, st5Answers, submitStatus, mhscaQuestions, st5Questions, mhsca, st5, filteredRecords, dashboardStats, submitForm, fetchRecords, exportCSV,
+          trendChartCanvas,
+          isModalOpen, modalSubTab, editingRecord, planOptions, plans, savePlanStatus, openManageModal, closeManageModal, printRecord, submitManagePlan, parsedPlanHistory,
+          assessmentDetail, isLoadingAssessment, st5Labels, mhscaBadgeClass, st5BadgeClass, mhscaResultClass, st5ResultClass,
+          serviceCategories, newServiceCategory, newServiceDetail, saveServiceStatus, parsedServiceHistory, submitServiceRecord,
+          usersList, isUserLoading, isUserSaving, newUser, fetchUsers, handleAddUser, handleResetPassword, handleDeleteUser
+        };
+      }
+    }).mount('#app');
+  </script>
 </body>
 </html>
